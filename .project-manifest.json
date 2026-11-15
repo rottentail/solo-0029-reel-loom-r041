@@ -83,6 +83,11 @@
       "responsibility": "planner"
     },
     {
+      "id": "preflight",
+      "path": "reel_loom/preflight.py",
+      "responsibility": "startup encoder capability probe gating service readiness"
+    },
+    {
       "id": "probe",
       "path": "reel_loom/probe.py",
       "responsibility": "probe"

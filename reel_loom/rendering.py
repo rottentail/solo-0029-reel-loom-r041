@@ -1,5 +1,6 @@
 import logging
 import threading
+import time
 from .errors import LoomError
 from .probe import inspect_media
 from .timebase import seconds, TICKS_PER_SECOND
@@ -13,11 +14,15 @@ class Renderer:
         self.planner, self.processes, self.artifacts = planner, processes, artifacts
         self.stopping = threading.Event()
         self.threads = []
+        self._active_lock = threading.Lock()
+        self._active = {}
 
     def execute(self, ticket):
         ticket_id = ticket["id"]
         snapshot = ticket["snapshot"]
         suffix = ".mp4" if snapshot["look"]["spec"]["kind"] == "video" else ".wav"
+        with self._active_lock:
+            self._active[ticket_id] = {"kind": "render", "started": threading.get_ident()}
         try:
             with self.blobs.temporary(suffix) as output:
                 args = self.planner.compile(snapshot, lambda key: self.blobs.resolve(key, verify=True), output)
@@ -39,6 +44,13 @@ class Renderer:
             logger.exception("Render failed unexpectedly: %s", ticket_id)
             self.tickets.fail(ticket_id, LoomError("internal_render", "Unexpected rendering failure", 500))
             return None
+        finally:
+            with self._active_lock:
+                self._active.pop(ticket_id, None)
+
+    def active_tickets(self):
+        with self._active_lock:
+            return list(self._active)
 
     def run_once(self):
         ticket = self.tickets.claim()
@@ -58,6 +70,24 @@ class Renderer:
             thread = threading.Thread(target=self.loop, name=f"loom-render-{index}", daemon=True)
             thread.start()
             self.threads.append(thread)
+
+    def drain(self, timeout):
+        """Stop claiming new work and release worker threads.
+
+        Running renders observe the draining flag, terminate their FFmpeg
+        processes and record a terminal failure/cancellation state, so the
+        next container can retry the original frozen ticket after recovery.
+        """
+        self.stopping.set()
+        end = time.monotonic() + max(1.0, float(timeout))
+        for thread in list(self.threads):
+            remaining = max(0.0, end - time.monotonic())
+            thread.join(timeout=remaining)
+        joined = all(not thread.is_alive() for thread in self.threads)
+        report = {"worker_threads": len(self.threads), "joined": joined,
+                  "active_tickets": self.active_tickets()}
+        self.threads.clear()
+        return report
 
     def close(self):
         self.stopping.set()

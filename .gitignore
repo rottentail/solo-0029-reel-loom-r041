@@ -5,3 +5,5 @@ __pycache__/
 .reel-loom/
 build/
 dist/
+deploy/runtime/
+deploy/data/

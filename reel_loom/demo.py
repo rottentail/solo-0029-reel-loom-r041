@@ -30,6 +30,7 @@ class Walkthrough:
     def __init__(self, settings):
         self.settings = settings
         self.app = Application(settings, start_workers=False)
+        self.app.mark_ready()
         self.server = MediaHttpServer(("127.0.0.1", 0), Api(self.app))
         self.thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": .02}, daemon=True)
         self.thread.start()
@@ -137,6 +138,7 @@ class Walkthrough:
             claimed = self.app.tickets.claim()
             self.close()
             with Application(self.settings, start_workers=False) as restarted:
+                restarted.mark_ready()
                 recovered = restarted.tickets.get(claimed["id"])
                 require(recovered["state"] == "failed" and recovered["error"]["error"] == "worker_interrupted",
                         "walkthrough_recovery", "Interrupted render was not recovered")

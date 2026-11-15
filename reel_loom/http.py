@@ -2,6 +2,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
 import re
+import threading
 from urllib.parse import urlsplit, parse_qs, unquote
 from .api import Download
 from .errors import LoomError, require
@@ -17,7 +18,22 @@ class MediaHttpServer(ThreadingHTTPServer):
 
     def __init__(self, address, api):
         self.api = api
+        self.active_requests = 0
+        self._active_lock = threading.Lock()
         super().__init__(address, MediaHandler)
+
+    def process_request(self, request, client_address):
+        with self._active_lock:
+            self.active_requests += 1
+        try:
+            super().process_request(request, client_address)
+        finally:
+            with self._active_lock:
+                self.active_requests -= 1
+
+    def request_snapshot(self):
+        with self._active_lock:
+            return {"in_flight_requests": self.active_requests}
 
 
 class MediaHandler(BaseHTTPRequestHandler):

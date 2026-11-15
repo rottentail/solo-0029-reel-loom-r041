@@ -10,7 +10,9 @@ python3 -m venv .venv
 .venv/bin/python -m reel_loom.server
 ```
 
-服务入口 `http://127.0.0.1:8729/loom/v1/`。依赖包 imageio-ffmpeg 提供可执行文件；可用 `LOOM_FFMPEG` 指定系统 FFmpeg。运行时不需要在线服务。数据库与媒体默认写入 `.reel-loom/`，用 `LOOM_DATA` 改变存储位置；`LOOM_PORT`、`LOOM_HOST`、`LOOM_WORKERS` 控制监听与 1–4 个编码线程。每个存储位置只允许一个服务进程，启动锁防止把另一服务的运行任务误判为中断。
+服务入口 `http://127.0.0.1:8729/loom/v1/`。依赖包 imageio-ffmpeg 提供可执行文件；可用 `LOOM_FFMPEG` 指定系统 FFmpeg。运行时不需要在线服务。数据库与媒体默认写入 `.reel-loom/`，用 `LOOM_DATA` 改变存储位置；`LOOM_PORT`、`LOOM_HOST`、`LOOM_WORKERS` 控制监听与 1–4 个编码线程，`LOOM_RENDER_TIMEOUT`、`LOOM_SHUTDOWN_TIMEOUT` 控制单任务期限与终止宽限。每个存储位置只允许一个服务进程，启动锁防止把另一服务的运行任务误判为中断。
+
+容器化长期运行（只读镜像、非 root、单一可写数据卷、真实编解码预检后才宣告健康、SIGTERM 有界排空与同卷恢复）的构建与滚动替换演练见 [`deploy/DEPLOYMENT.md`](deploy/DEPLOYMENT.md)。健康端点 `/health` 在 starting/draining 阶段返回 503 并带 `phase`，仅在预检通过后返回 200；终止期间新工作返回 503，GET 观测与 cancel 保持可用。
 
 当前服务用于可信制作网络，未提供身份认证。默认只监听回环地址。单素材 128 MiB、最长 3600 秒、最大 3840×2160，最多 64 个镜段；同步分析与编码有容量和超时限制。上传原始媒体字节；不接受远端地址或流式播放清单。元信息和成片均来自真实媒体工具。
 

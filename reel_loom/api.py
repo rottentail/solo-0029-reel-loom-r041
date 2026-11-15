@@ -29,6 +29,10 @@ class Api:
         app = self.app
         if method == "GET" and route == "/health":
             return app.health()
+        if method in ("POST", "PUT") and not self._allowed_while_draining(route):
+            app.require_accepting()
+        if method == "GET" and route == "/health":
+            return app.health()
         if method == "GET" and route == "/":
             return {"name": "声画织场", "api": self.prefix,
                     "resources": ["assets", "reels", "looks", "tickets", "analyses", "artifacts", "imprints"],
@@ -145,6 +149,11 @@ class Api:
             require(type(body.get("dry_run", True)) is bool, "invalid_boolean", "dry_run must be boolean")
             return app.resources.sweep(body.get("dry_run", True))
         raise LoomError("not_found", "Unknown method or API entry", 404)
+
+    def _allowed_while_draining(self, route):
+        """Only read-backs and explicit cancellation stay open during shutdown."""
+        cancel = re.fullmatch(r"/tickets/([^/]+)/cancel", route)
+        return bool(cancel)
 
     def expected(self, headers, default=None):
         value = headers.get("If-Match")

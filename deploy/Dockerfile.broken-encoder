@@ -1,0 +1,13 @@
+# syntax=docker/dockerfile:1
+#
+# Variant of the service image in which the FFmpeg binary is replaced by a
+# script that always fails.  Used solely by the encoder-unavailable drill:
+# startup must refuse to serve before opening the HTTP port.
+ARG BASE_IMAGE=reel-loom:local
+FROM ${BASE_IMAGE}
+USER root
+RUN printf '#!/bin/sh\necho "simulated broken encoder" >&2\nexit 127\n' \
+        > /usr/local/bin/broken-ffmpeg \
+    && chmod 0555 /usr/local/bin/broken-ffmpeg
+USER loom:loom
+ENV LOOM_FFMPEG=/usr/local/bin/broken-ffmpeg
